@@ -18,6 +18,9 @@ using { /UnrealEngine.com/Temporary/Diagnostics }
 using { /Fortnite.com/Characters }
 using { /Fortnite.com/Game }
 using { /Verse.org/Concurrency }
+using { /UnrealEngine.com/Temporary/SpatialMath }
+using { /Verse.org/Random }
+using { /Fortnite.com/AI }
 
 # interesting about how to handle all players joining.
 cage_swap_device := class(creative_device):
@@ -164,3 +167,100 @@ mutatorDevice := class(creative_device):
         for (Player : GetPlayspace().GetPlayers()):
             if (Character := Player.GetFortCharacter[]):
                 Character.ReleaseFromStasis()
+
+
+queue<public>(t:type) := class:
+    Elements<internal>:[]t = array{}
+
+    Enqueue<public>(NewElement:t):queue(t)=
+        queue(t){Elements := Elements + array{NewElement}}
+    
+    Dequeue<public>()<decides><transacts>:tuple(queue(t),t)=
+        FirstElement := Front[]
+        (queue(t){Elements := Elements.RemoveElement[0]}, FirstElement)
+
+    Size<public>()<transacts>:int=
+        Elements.Length
+    
+    IsEmpty<public>()<decides><transacts>:void=
+        Size() = 0
+    
+    Front<public>()<decides><transacts>:t=
+        Elements[0]
+    
+    Rear<public>()<decides><transacts>:t=
+        Elements[Elements.Length - 1]
+        
+CreateQueue<public><constructor>(InitialElements:[]t where t:type) := queue(t):
+    Elements := InitialElements
+
+# This snippet sends a guard to a prop and then keeps the prop near the guard as they move to their next destination, creating the appearance that the guard has picked up and moved the prop.
+guard_prop_carry := class(creative_device):
+ 
+    # A reference to the Guard Spawner device. This must be set in the Details panel of this Verse device before starting the game.
+    @editable
+    GuardSpawner:guard_spawner_device = guard_spawner_device{}
+ 
+    # A reference to prop that will spawn when the game starts. This must be set in the Details panel of Verse device before starting the game.
+    @editable
+    Loot:creative_prop_asset = DefaultCreativePropAsset
+ 
+    # A reference to the guard that will spawn when the game starts
+    var MaybeGuardFollower:?agent = false
+ 
+    # A reference to the result of calling SpawnProp()
+    # The ?creative_prop value needs to be false so we can check if the prop did spawn.
+    # The spawn_prop_result will be overwritten so it can be set to anything.
+    var PropResult:tuple(?creative_prop, spawn_prop_result) = (false, spawn_prop_result.Ok)
+ 
+    # Runs when the device is started in a running game
+    OnBegin<override>()<suspends>:void=
+        
+        # Spawn the prop to be navigated to
+        # This location was chosen at random
+        set PropResult = SpawnProp(Loot, vector3{X := 832.000000,Y := 1168.000000, Z := 0.000000}, rotation{})
+ 
+        # Await the Guard Spawner SpawnedEvent
+        GuardAgent := GuardSpawner.SpawnedEvent.Await()
+        # OnGuardSpawned(GuardAgent)
+        
+        # Short Sleep to ensure you can see the guard start the navigation.
+        # This is not required for the code to function.
+        Sleep(2.0)
+ 
+        # Create a Task so we know when NavigateToProp completes
+        NavigateTask := spawn{NavigateToProp()}
+        # Await NavigateToProp completion
+        NavigateTask.Await()
+        # When we know the guard has reached the prop, make the prop follow the guard
+        AttachPropToGuard()
+ 
+    # Send guard to a location near the prop
+    NavigateToProp()<suspends>:void=
+        if:
+            GuardFollower := MaybeGuardFollower?
+            Prop := PropResult(0)?
+            FollowerNav := GuardFollower.GetFortCharacter[].GetNavigatable[]
+        then:
+            Print("GuardFollower navigating to prop")
+            PropLocation := Prop.GetTransform().Translation
+            # Here we use a random offset distance from the prop so the guard does not jump on top of the prop or try to destroy it
+            RandomOffsetFromProp := vector3{X:=PropLocation.X + GetRandomFloat(-200.0, 200.0), Y:= PropLocation.Y + GetRandomFloat(-200.0, 200.0), Z:= PropLocation.Z}
+            NavigationTarget := MakeNavigationTarget(RandomOffsetFromProp)
+            FollowerNav.NavigateTo(NavigationTarget)
+ 
+    # Make the prop "follow" the guard by looping a call to MoveTo that moves the prop to the guard's Transform
+    AttachPropToGuard()<suspends>:void=
+        if:
+            Prop := PropResult(0)?
+            GuardFollower := MaybeGuardFollower?
+            GuardFortCharacter := GuardFollower.GetFortCharacter[]
+        then:
+            loop:
+                Prop.MoveTo(GuardFortCharacter.GetTransform(), 1.0)
+
+# 注意index的使用，这里的index是从0开始的，所接的符号不是:, but :=
+ForLoopWithIndex():void = 
+    Arr := array{1, 2.0, "a"}
+    for (Index := 0..Arr.Length-1):
+        if(Value := Arr[Index]) {Print("Index: {Index}, Value: unknown type so skip to string...")}
