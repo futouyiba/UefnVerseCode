@@ -8,7 +8,6 @@ using { /Fortnite.com/Game }
 
 # See https://dev.epicgames.com/documentation/en-us/uefn/create-your-own-device-in-verse for how to create a verse device.
 
-tagSpawner := class(tag){}
 
 # A Verse-authored creative device that can be placed in a level
 omg_manager := class(creative_device):
@@ -84,9 +83,9 @@ omg_manager := class(creative_device):
 
     OnPlayerSpawned(Agent: agent):void ={
         Print("Player spawned! Check whether it's a respawn...")
-        InitPlayer(Agent)}
+        InitPlayerAtSpawn(Agent)}
 
-    InitPlayer(Agent: agent):void =
+    InitPlayerAtSpawn(Agent: agent):void = 
         Print("init player triggered from spawn event")
         if:
             Player := player[Agent]
@@ -96,10 +95,11 @@ omg_manager := class(creative_device):
             else:
                 Fort.EliminatedEvent().Subscribe(OnPlayerEliminated)
                 NewOmgPlayer := omg_player{Player:= Player, FortChar := Fort}
-                # set OmgPlayers[Player] = omg_player{}
-                NewOmgPlayer.Setup()
+                if( set OmgPlayers[Player] = NewOmgPlayer):
+                    NewOmgPlayer.Setup()
 
     OnPlayerEliminated(Result: elimination_result):void =
+        Print("Player eliminated!"  )
         if:
             Eliminator := Result.EliminatingCharacter?,
             Eliminatee := Result.EliminatedCharacter,
@@ -107,3 +107,6 @@ omg_manager := class(creative_device):
             TeeAgent := Eliminatee.GetAgent[]
         then:
             # OmgPlayer.Eliminated := true
+            #
+
+            
