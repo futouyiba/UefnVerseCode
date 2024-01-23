@@ -96,10 +96,11 @@ omg_manager := class(creative_device):
             else:
                 Fort.EliminatedEvent().Subscribe(OnPlayerEliminated)
                 NewOmgPlayer := omg_player{Player:= Player, FortChar := Fort}
-                # set OmgPlayers[Player] = omg_player{}
-                NewOmgPlayer.Setup()
+                if( set OmgPlayers[Player] = NewOmgPlayer):
+                    NewOmgPlayer.Setup()
 
     OnPlayerEliminated(Result: elimination_result):void =
+        Print("Player eliminated!"  )
         if:
             Eliminator := Result.EliminatingCharacter?,
             Eliminatee := Result.EliminatedCharacter,
