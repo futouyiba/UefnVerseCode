@@ -21,6 +21,30 @@ using { /Verse.org/Concurrency }
 using { /UnrealEngine.com/Temporary/SpatialMath }
 using { /Verse.org/Random }
 using { /Fortnite.com/AI }
+using { /Fortnite.com/FortPlayerUtilities }
+using { /Verse.org/Simulation/Tags }
+
+fort_callback := type {_(:fort_character):void}
+# from youtube warforge live broadcast, put it within a class
+# HotDogPickedUpEvent : fort_callback
+
+# logger that can used in <transacts> and <decides> functions
+my_log_channel<public> := class(log_channel):
+
+tagSpawner := class(tag){}
+
+
+# A project-wide "Logger" to print messages from functions that are not in a class with a log.
+# The non-Logger Print is <no_rollback>, so it can't be used in a <transacts> function.
+ProjectLog<public>(Message:[]char, ?Level:log_level = log_level.Normal)<transacts>:void=
+    Logger := log{Channel := my_log_channel}
+    Logger.Print(Message, ?Level := Level)
+
+# Usage:
+# ProjectLog("EndGame: Player has won!", ?Level := log_level.Verbose)
+
+# You don't have to specify the Level
+# ProjectLog("Hello Verse!")
 
 # logger that can used in <transacts> and <decides> functions
 my_log_channel<public> := class(log_channel):
@@ -51,13 +75,22 @@ cage_swap_device := class(creative_device):
     OnJoin(Agent: agent):void=
         AgentSetup(Agent)
     
-# extension methods
+# extension methods 
 (Value : logic).ToString<public>() : string =
     if (Value?):
         return "true"
     return "false"
 
 # (Value: string).ToMessage<localizes>() : message = "{Value}"
+
+(Translation:vector3).ToString<public>():string = 
+    return "V3 ~ X: {Translation.X}, Y: {Translation.Y}, Z: {Translation.Z}"
+
+(Rotation:rotation).ToString<public>():string = 
+    return "Rot2V3: {Rotation.GetAxis()}"
+
+(Transform:transform).ToString<public>():string = 
+    return "Transform ~ Translation: {Transform.Translation.ToString()}, Rotation: {Transform.Rotation.ToString()}, Scale: {Transform.Scale.ToString()}"
 
 MakeMessageFromString<localizes>(Text: string): message = "{Text}"
 
@@ -69,13 +102,20 @@ RemoveKeyFromMap(ExampleMap:[string]int, ElementToRemove:string):[string]int=
         set NewMap = ConcatenateMaps(NewMap, map{Key => Value})
     return NewMap
 
-        
+# Returns Number converted to a string, truncated to Decimals places.
+ToTruncatedString<public>(Number:float, Decimals:int):[]char=
+    var Str:[]char = ToString(Number)
+    if:
+        DotIndex := Str.Find['.']
+        StopIndex := if (Decimals > 0) then Min(DotIndex+Decimals+1,Str.Length) else DotIndex
+        set Str = Str.Slice[0, StopIndex] 
+    Str
+    
 # Device Configuration:
 # 1.  Set the 'Cashier' Conditional Button Device's Key Item to use the currency type you want (Gold, etc).
 # 2.  Set the HUD Message Device to 'Message Recipient:  Triggering Player'.
 # 3.  Set the Button Device to the desired Interact Time.
 # 4.  Add the Item being purchased to the Item List of the Item Granter.
-
 shop_device := class(creative_device):
 
     @editable
@@ -654,3 +694,672 @@ UiDialogModule := module:
         - Leave feedback/questions on my UI Dialog Device Forum post: https://forums.unrealengine.com/t/ui-dialog-verse-device-with-next-exit-button-snippet/744022
         - Follow my Devlog for my UEFN game WIP, Sprigs: https://forums.unrealengine.com/t/sprigs-devlog-6-the-floor-is-lava-physical-material-experiments/657293 
         - Epic Docs webpage about Verse UI, for reference: https://dev.epicgames.com/documentation/en-us/uefn/creating-in-game-ui-in-verse #>
+
+# from bug blaster the youtube video made by warforge
+PropMoveToPlayer(Prop:creative_prop, Player: player)<suspends>:void=
+    MoveSpeed := 0.1
+    loop:
+        Sleep(0.03)
+        if (PlayerFort := Player.GetFortCharacter[], Prop.IsValid[])
+        then:
+            PropLocation := Prop.GetTransform().Translation
+            PlayerLocation := PlayerFort.GetTransform().Translation
+
+            if(LookDirection := (PlayerLocation - PropLocation).MakeUnitVector[]):
+                Yaw := RadiansToDegrees(ArcTan(LookDirection.Y, LookDirection.X))
+                Pitch := 0.0
+                Roll := 0.0
+            
+                NewRotation := MakeRotationFromYawPitchRollDegrees(Yaw, Pitch, Roll)
+
+                LerpLocation:= Lerp(PropLocation, PlayerLocation, MoveSpeed)
+                FinalLocation := vector3 {X:= LerpLocation.X, Y:= LerpLocation.Y, Z:= 0.0}
+        else:
+            break
+
+# from triad infiltrator
+
+# FindTeamWithLargestDifference():?team =
+#     Print("Attempting to find smallest team")
+#     var TeamToAssign:?team = false
+#     var LargestDifference:int = 0
+#     for:
+#         CandidateTeam:Teams
+#         CurrentTeamSize := GetPlayspace().GetTeamCollection().GetAgents[CandidateTeam].Length
+#         MaximumTeamSize := TeamsAndTotals[CandidateTeam]
+#     do:
+#         Logger.Print("Checking a team...")
+#         Logger.Print("Maximum size Maximum size of team {CandidateTeamIndex + 1} is {MaximumTeamSize}")
+#         DifferenceFromMaximum := MaximumTeamSize - CurrentTeamSize
+#         Logger.Print("Difference from minimum is {DifferenceFromMaximum}")
+#         if(LargestDifference < DifferenceFromMaximum):
+#             set LargestDifference = DifferenceFromMaximum
+#             set TeamToAssign = option{CandidateTeam}
+#             Logger.Print("Found a team under minimum players: {DifferenceFromMaximum}")
+#     return TeamToAssign
+
+# OnBegin<override>()<suspends> : void =
+#     # Get all the Teams
+#     set Teams = GetPlayspace().GetTeamCollection().GetTeams()
+#     set AllPlayers = GetPlayspace().GetPlayers()
+#     # Save the teams to later reference them
+#     set Infiltrators = option{Teams[0]}
+#     set Attackers = option{Teams[1]}
+#     set Defenders = option{Teams[2]}
+       
+#     if:
+#         Infiltrators := InfiltratorsOpt?
+#         Attackers := AttackersOpt?
+#         Defenders :=  DefendersOpt?
+#         Logger.Print("Found all three teams")
+#         set TeamsAndTotals[Infiltrators] = MaximumInfiltrators
+#         set TeamsAndTotals[Attackers] = MaximumAttackers
+#         set TeamsAndTotals[Defenders] = MaximumDefenders
+#         Logger.Print("Set all three teams in TeamsAndTotals")
+#     then:
+#         set AllPlayers = Shuffle(AllPlayers)
+#         BalanceTeams()
+#         TeleportPlayersToStartLocations()
+#     else:
+#         Logger.Print("Couldn't find all teams, make sure to assign the correct teams in your island settings.")
+
+triad_infiltration_log_channel := class(log_channel){}
+
+asymmetric_multiplayer_balance := class(creative_device):
+
+    Logger:log = log{Channel := triad_infiltration_log_channel}
+
+    # To avoid players not being able to join a team, you should set the maximum number
+    @editable
+    MaximumInfiltrators:int = 2
+    @editable
+    MaximumAttackers:int = 3
+    @editable
+    MaximumDefenders:int = 3
+    var TeamsAndTotals:[team]int = map{}
+    @editable
+    Teleporters:[]teleporter_device = array{}
+   
+    @editable
+    InvisibilityManager:invisibility_manager = invisibility_manager{}
+
+    @editable
+    var WeaponGranters:[]item_granter_device = array{}
+
+    @editable
+    PlayersSpawners:[]player_spawner_device = array{}
+   
+    var InfiltratorsOpt:?team = false
+    var AttackersOpt:?team = false
+    var DefendersOpt:?team = false
+    var Teams:[]team = array{}
+    var AllPlayers:[]player = array{}
+
+    OnBegin<override>()<suspends> : void =
+        # Get all the Teams
+        set Teams = GetPlayspace().GetTeamCollection().GetTeams()
+        set AllPlayers = GetPlayspace().GetPlayers()
+        # Save the teams to later reference them
+        set InfiltratorsOpt = option{Teams[0]}
+        set AttackersOpt = option{Teams[1]}
+        set DefendersOpt = option{Teams[2]}
+       
+        if:
+            Infiltrators := InfiltratorsOpt?
+            Attackers := AttackersOpt?
+            Defenders :=  DefendersOpt?
+            Logger.Print("Found all three teams")
+            set TeamsAndTotals[Infiltrators] = MaximumInfiltrators
+            set TeamsAndTotals[Attackers] = MaximumAttackers
+            set TeamsAndTotals[Defenders] = MaximumDefenders
+            Logger.Print("Set all three teams in TeamsAndTotals")
+        then:
+            set AllPlayers = Shuffle(AllPlayers)
+            #Subscribe to PlayerAddedEvent to allow team rebalancing when a new player joins the game
+            GetPlayspace().PlayerAddedEvent().Subscribe(OnPlayerAdded)
+            for(PlayerSpawner:PlayersSpawners):
+                PlayerSpawner.SpawnedEvent.Subscribe(OnPlayerSpawn)
+           
+            BalanceTeams()
+            Logger.Print("Teams balanced, calling invisibility script")
+            InvisibilityManager.StartInvisibilityManager(Teams, AllPlayers, Infiltrators)
+            TeleportPlayersToStartLocations()
+        else:
+            Logger.Print("Couldn't find all teams, make sure to assign the correct teams in your island settings.")
+
+    # Grants players a weapon based on the index of their team in the Teams array
+    # by indexing into the WeaponGranters array.
+    GrantTeamWeapon(InPlayer:player):void=
+        if(CurrentTeam := GetPlayspace().GetTeamCollection().GetTeam[InPlayer]):
+            for(TeamIndex -> PlayerTeam:Teams, PlayerTeam = CurrentTeam):
+                if(WeaponGranter := WeaponGranters[TeamIndex]):
+                    WeaponGranter.GrantItem(InPlayer)
+                    Logger.Print("Granted the a Player on team {TeamIndex + 1} a weapon")
+   
+    # Runs when any player spawns from a spawn pad.
+    # Calls GrantTeamWeapon using the provided SpawnedAgent.
+    OnPlayerSpawn(SpawnedAgent:agent):void=
+        if(SpawnedPlayer := player[SpawnedAgent]):
+            Logger.Print("Attempting to grant spawned player a weapon")
+            GrantTeamWeapon(SpawnedPlayer)
+
+
+    # Handles a new player joining the game
+    OnPlayerAdded(InPlayer:player):void=
+        Logger.Print("A new Player joined, assigning them to a team")
+        FortTeamCollection := GetPlayspace().GetTeamCollection()
+        set AllPlayers = GetPlayspace().GetPlayers()
+
+        # Assign the new player to the smallest team
+        BalancePlayer(InPlayer)
+
+        if (FortTeamCollection.GetTeam[InPlayer] = InfiltratorsOpt?):
+            InvisibilityManager.OnInfiltratorJoined(InPlayer)
+
+    <#
+    For each player, find the number of players of the team they're on. Iterate through the
+    list of teams and assign them to the team with the least amount of players, or their
+    starting team in case of ties.
+    #>
+    BalanceTeams():void=
+        Logger.Print("Beginning to balance teams")
+        FortTeamCollection := GetPlayspace().GetTeamCollection()
+        Logger.Print("AllPlayers Length is {AllPlayers.Length}")
+
+        for (TeamPlayer : AllPlayers):
+            BalancePlayer(TeamPlayer)
+     
+    BalancePlayer(InPlayer:player):void=
+        var TeamToAssign:?team = false
+        set TeamToAssign = FindTeamWithLargestDifference()
+        if (AssignedTeam := TeamToAssign?, GetPlayspace().GetTeamCollection().AddToTeam[InPlayer, AssignedTeam]):
+            Logger.Print("Attempting to assign newly joined to a new team")
+        else:
+            Logger.Print("This player was already on the smallest team")
+
+    # Finds the team with the largest difference in their number of players from their
+    # maximum number of players
+    FindTeamWithLargestDifference():?team =
+        Logger.Print("Attempting to find smallest team")
+        var TeamToAssign:?team = false
+        var LargestDifference:int = 0
+        for:
+            CandidateTeamIndex -> CandidateTeam:Teams
+            CurrentTeamSize := GetPlayspace().GetTeamCollection().GetAgents[CandidateTeam].Length
+            MaximumTeamSize := TeamsAndTotals[CandidateTeam]
+        do:
+            Logger.Print("Checking a team...")
+            Logger.Print("Maximum size of team {CandidateTeamIndex + 1} is {MaximumTeamSize}")
+            DifferenceFromMaximum := MaximumTeamSize - CurrentTeamSize
+            Logger.Print("Difference from maximum is {DifferenceFromMaximum}")
+            if(LargestDifference < DifferenceFromMaximum):
+                set LargestDifference = DifferenceFromMaximum
+                set TeamToAssign = option{CandidateTeam}
+                Logger.Print("Found team {CandidateTeamIndex + 1} with difference {DifferenceFromMaximum}")
+
+        return TeamToAssign
+
+    TeleportPlayersToStartLocations():void=
+        Logger.Print("Teleporting players to start locations")
+        for:
+            TeamIndex -> PlayerTeam:Teams 
+            TeamPlayers := GetPlayspace().GetTeamCollection().GetAgents[PlayerTeam]
+            TeamTeleporter := Teleporters[TeamIndex]
+            Transform := TeamTeleporter.GetTransform()
+        do:
+            for(TeamPlayer:TeamPlayers):
+                TeamPlayer.Respawn(Transform.Translation, Transform.Rotation)
+                Logger.Print("Teleported this player to their start location")
+
+triad_invisibility_log_channel := class(log_channel){}
+
+invisibility_manager := class(creative_device):
+
+    Logger:log = log{Channel := triad_invisibility_log_channel}
+
+    @editable
+    PlayersSpawners:[]player_spawner_device = array{}
+   
+    # Whether the visibility of the infiltrators is shared with teammates.
+    @editable
+    IsVisibilityShared:logic = true
+
+    # How long the infiltrators are visible for after being damaged.
+    @editable
+    VulnerableSeconds:float = 3.0
+   
+    # How quickly infiltrators flicker after being damaged
+    @editable
+    FlickerRateSeconds:float = 0.8
+   
+    var Teams:[]team = array{}
+
+    var PlayerVisibilitySeconds:[agent]float = map{}
+
+    OnBegin<override>()<suspends>:void=
+        # Wait for teams to be balanced before subscribing to events that make the players invisible.
+        Logger.Print("Waiting for teams to be balanced...")
+   
+    StartInvisibilityManager<public>(AllTeams:[]team, Players:[]player, Infiltrators:team):void=
+        Logger.Print("Invisibility script started!")
+        set Teams = AllTeams
+        AllPlayers := Players
+        for(PlayerSpawner:PlayersSpawners):
+            PlayerSpawner.SpawnedEvent.Subscribe(OnPlayerSpawn)
+       
+        <# For each player, if they spawned on the infiltrator team, spawn an OnInfiltratorDamaged function for that
+        player. Then make their character invisible. #>
+        for(TeamPlayer : AllPlayers):
+            if:
+                FortCharacter:fort_character = TeamPlayer.GetFortCharacter[]
+                CurrentTeam := GetPlayspace().GetTeamCollection().GetTeam[TeamPlayer]
+                Logger.Print("Got this player's current team")
+                Infiltrators = CurrentTeam
+                set PlayerVisibilitySeconds[TeamPlayer] = 0.0
+                Logger.Print("Added player to PlayerVisibilitySeconds")
+            then:
+                spawn{OnInfiltratorDamaged(TeamPlayer)}
+                Logger.Print("Player spawned as an infiltrator, making them invisible")
+                FortCharacter.Hide()
+            else:
+                Logger.Print("This player isn't an infiltrator")
+
+    FlickerCharacter(InCharacter:fort_character)<suspends>:void=
+        Logger.Print("FlickerCharacter() invoked")
+        # Loop hiding and showing the character to create a flickering effect.
+        loop:
+            InCharacter.Hide()
+            Sleep(FlickerRateSeconds)
+            InCharacter.Show()
+            Sleep(FlickerRateSeconds)
+            # Each loop, decrease the amount of time the character is flickering by FlickerRateSeconds.
+            # If Remaining time hits 0, break out of the loop.
+            if:
+                TimeRemaining := set PlayerVisibilitySeconds[InCharacter.GetAgent[]] -= FlickerRateSeconds * 2
+                TimeRemaining <= 0.0
+            then:
+                InCharacter.Hide()
+                break                          
+
+    OnInfiltratorDamaged(InAgent:agent)<suspends>:void=
+        Logger.Print("Attempting to start flickering this character")
+        TeamCollection := GetPlayspace().GetTeamCollection()
+        if (FortCharacter := InAgent.GetFortCharacter[]):
+            loop:
+                if (IsVisibilityShared?, CurrentTeam := TeamCollection.GetTeam[InAgent], TeamAgents := TeamCollection.GetAgents[CurrentTeam]):
+                    # For each teammate, set them in PlayerVisibility seconds and spawn a FlickerEvent
+                    for(Teammate : TeamAgents):
+                        Logger.Print("Calling StartOrResetFlickering on a Teammate")
+                        StartOrResetFlickering(Teammate)
+                else:
+                    # Just flicker the damaged character
+                    Logger.Print("Calling StartOrResetFlickering on InAgent")
+                    StartOrResetFlickering(InAgent)
+                FortCharacter.DamagedEvent().Await()
+
+    StartOrResetFlickering(InAgent:agent):void=
+        if (not IsFlickering[InAgent], FortCharacter := InAgent.GetFortCharacter[]):
+            Logger.Print("Attempting to start NEW FlickerEvent for this character")
+            # New flickering started
+            if (set PlayerVisibilitySeconds[InAgent] = VulnerableSeconds):
+                spawn{FlickerCharacter(FortCharacter)}
+                Logger.Print("Spawned a FlickerEvent for this character")
+        else:
+            # Reset ongoing flickering
+            if (set PlayerVisibilitySeconds[InAgent] = VulnerableSeconds):
+                Logger.Print("Reset character's FlickerTimer to VulnerableSeconds")
+       
+    IsFlickering(InAgent:agent)<decides><transacts>:void=
+        PlayerVisibilitySeconds[InAgent] > 0.0
+
+    OnInfiltratorJoined<public>(InAgent:agent):void=
+        spawn{OnInfiltratorDamaged(InAgent)}
+       
+    OnPlayerSpawn(SpawnedAgent:agent):void=
+        if:
+            FortCharacter:fort_character = SpawnedAgent.GetFortCharacter[]
+            CurrentTeam := GetPlayspace().GetTeamCollection().GetTeam[SpawnedAgent]
+            Teams[0] = CurrentTeam
+            Logger.Print("Player spawned as an infiltrator, making them invisible")
+        then:
+            FortCharacter.Hide()
+
+triad_item_capture_log_channel := class(log_channel){}
+
+item_capture_manager := class(creative_device):
+
+    Logger:log = log{Channel := triad_item_capture_log_channel}
+    @editable
+    CaptureItemSpawner:capture_item_spawner_device = capture_item_spawner_device{}
+    @editable
+    CaptureItemIndicator:creative_prop = creative_prop{}
+    @editable
+    UpdateRateSeconds:float = 0.033
+    @editable
+    VerticalOffset:float = 180.0
+
+    OnBegin<override>()<suspends>:void=
+        CaptureItemSpawner.ItemPickedUpEvent.Subscribe(OnItemGrabbed)
+   
+    OnItemGrabbed(InAgent:agent):void=
+        Logger.Print("Objective Captured")
+        if(FortCharacter := InAgent.GetFortCharacter[]):
+            spawn{FollowCharacter(FortCharacter)}
+
+    FollowCharacter(FortCharacter:fort_character)<suspends>:void=
+        Logger.Print("Spawned FollowCharacter function")
+        race:
+            loop:
+                Transform := FortCharacter.GetTransform()
+                if:
+                    CaptureItemIndicator.TeleportTo[Transform.Translation + vector3{Z := VerticalOffset}, Transform.Rotation]
+                Sleep(UpdateRateSeconds)
+            CaptureItemSpawner.ItemCapturedEvent.Await()
+            CaptureItemSpawner.ItemDroppedEvent.Await()
+            FortCharacter.EliminatedEvent().Await()
+
+        Sleep(UpdateRateSeconds)
+        Logger.Print("Objective dropped or captured")
+        SpawnerTransform := CaptureItemSpawner.GetTransform()
+        if:
+            # Teleport back to spawner
+            CaptureItemIndicator.TeleportTo[SpawnerTransform.Translation + vector3{Z := VerticalOffset * -10}, SpawnerTransform.Rotation]
+            Logger.Print("Returned Beacon to capture spawner")
+
+wrapp_event_add_param:=module:
+        #usage example (when subscribing to an event that returns an agent)
+    # ButtonDevice.InteractedWithEvent.SubscribeAgent(OnButtonInteract, "Hello!")
+
+    OnButtonInteract(Agent : agent, Text : string) : void =
+        Print("Button interacted with {Text}!")
+        
+    #usage example (when subscribing to an event that returns tuple(), aka an empty tuple)
+    # CampfireDevice.CampfirePulseEvent.SubscribeEmpty(OnCampfirePulse, 90210)
+
+    OnCampfirePulse(Number : int) : void =
+        Print("Campfire pulse had {Number}!")
+
+    #The important code is below. Put this in one of your verse files, perhaps utils.verse or something!
+
+    using { /Verse.org/Simulation }
+
+    (Listenable : listenable(agent)).SubscribeAgent(OutputFunc : tuple(agent, t)->void, ExtraData : t where t:type) : cancelable =
+        Wrapper := wrapper_agent(t){ExtraData := ExtraData, OutputFunc := OutputFunc}
+        Listenable.Subscribe(Wrapper.InputFunc)
+
+    wrapper_agent(t : type) := class():
+        ExtraData : t;
+        OutputFunc : tuple(agent, t) -> void
+        InputFunc(Agent : agent):void = OutputFunc(Agent, ExtraData)
+
+    (Listenable : listenable(tuple())).SubscribeEmpty(OutputFunc : t -> void, ExtraData : t where t:type) : cancelable =
+        Wrapper := wrapper_empty(t) {ExtraData := ExtraData, OutputFunc := OutputFunc}
+        Listenable.Subscribe(Wrapper.InputFunc)
+
+    wrapper_empty(t : type) := class():
+        ExtraData : t;
+        OutputFunc : t -> void
+        InputFunc():void = OutputFunc(ExtraData)
+
+opt_in_selection_pool := module:
+        
+    using { /Fortnite.com/Characters }
+    using { /Fortnite.com/Devices }
+    using { /UnrealEngine.com/Temporary/Diagnostics }
+    using { /Verse.org/Random }
+    using { /Verse.org/Simulation }
+
+    # Selects a random subset of Count elements from Elements and returns an array of the selected elements.
+    # If Count is greater than the number of elements in Elements, all elements are returned in a random order.
+    # This function uses parametric types, a feature of Verse. Parametric types allow you to specify arguments without a specific type.
+    # This means that expressions can be more "generic" and operate on the arguments as long as those operations are supported by the type.
+    # In this case, we don't need to know the type of each element in Elements to operate on the array, so we can use Shuffle and Slice on any type "t".
+    # For more information, see https://dev.epicgames.com/documentation/en-us/uefn/Verse/parametric-types-in-verse
+    SelectRandomElements<public>(Elements:[]t, Count:int where t:type):[]t=
+        # Shuffle the Elements so they're in random order when we pick them.
+        RandomElements := Shuffle(Elements)
+        # Slice returns an array from StartIndex (first argument) to StopIndex (second argument).
+        # Since the elements are in random order, this will return a random subset of Count elements from the start.
+        if (Selection := RandomElements.Slice[0, Count]):
+            Selection # If the Slice operation succeeds this is the last expression of the function, which is used as the implicit return.
+        else:
+            # If there are less than Count elements in the array, return all elements. They'll be in random order.
+            RandomElements
+
+    # This device is used by players to opt in or out of a selection pool.
+    # The players interact with the OptInOutDevice to opt-in or opt-out of the SelectionPool.
+    # Interacting with the SelectionTrigger device selects SelectionCount players from the pool and fires the PlayersSelectedEvent.
+    opt_in_selection_pool_device := class(creative_device):
+        # Used by a player to opt in or out of the selection pool.
+        @editable
+        OptInOutDevice:switch_device = switch_device{}
+        # Used to trigger players' selection from the pool.
+        @editable
+        SelectionTrigger:button_device = button_device{}
+        # How many players are selected from the pool.
+        @editable
+        SelectionCount<public>:int = 1
+        # Event fired when players are selected from the pool. Contains the array of selected players.
+        PlayersSelectedEvent<public>:event([]player) = event([]player){}
+
+        # Pool of players from which to select SelectionCount players.
+        var SelectionPool:[]player = array{}
+
+        # Add the Agent to the selection pool as a player.
+        OptIn<private>(Agent:agent):void=
+            # We cast the Agent to a player (player[Agent]) to add it to the SelectionPool array.
+            # This will fail if the Agent is not a player.
+            if (Player := player[Agent]):
+                # To add the Player to the SelectionPool we construct a new array from the current
+                # SelectionPool + an array with the new Player.
+                set SelectionPool += array{Player}
+                Print("Player opted in to selection pool. Players in pool: {SelectionPool.Length}")
+
+        # Remove the Agent from the selection pool as a player.
+        OptOut<private>(Agent:agent):void=
+            # RemoveFirstElement returns the array without the first match found, so we set SelectionPool = the new array.
+            # We must wrap it in a failure context if the player is not in the array or casting the Agent to a player fails.
+            if (set SelectionPool = SelectionPool.RemoveFirstElement[player[Agent]]):
+                Print("Player opted out of selection pool. Players in pool: {SelectionPool.Length}")
+        
+        # Reset all players to opted-out state and removes them from the SelectionPool
+        ResetPool<private>():void=
+            # Since we're calling OptInOutDevice.TurnOff for the Player, OptOut(Player) is called since it's subscribed
+            # to the OptInOutDevice.TurnedOffEvent. That'll remove the Player from the SelectionPool.
+            for (Player:SelectionPool) do OptInOutDevice.TurnOff(Player)
+            # We still reset the SelectionPool with "= array{}" to remove any players that left the game before a selection
+            # is made. It's simpler than tracking players leaving the game.
+            set SelectionPool = array{}
+            Print("Pool reset.")        
+            
+        # Selects the Players and resets the SelectionPool
+        SelectPlayers<private>(Agent:agent):void= 
+            SelectedPlayers := SelectRandomElements(SelectionPool, SelectionCount)
+            PlayersSelectedEvent.Signal(SelectedPlayers)
+            ResetPool()
+            
+        OnBegin<override>()<suspends>:void=
+            OptInOutDevice.TurnedOnEvent.Subscribe(OptIn)
+            OptInOutDevice.TurnedOffEvent.Subscribe(OptOut)
+            SelectionTrigger.InteractedWithEvent.Subscribe(SelectPlayers)
+
+            # An example of how you could use the PlayersSelectedEvent.
+            # This example will damage the selected players.
+            loop:
+                SelectedPlayers := PlayersSelectedEvent.Await()
+                for (Player:SelectedPlayers, Character := Player.GetFortCharacter[]):
+                    Character.Damage(5.0)
+
+
+killing_spree := module:
+        <## ABOUT ## ===========================================================================================================================##
+     Killing Spree is a script that will reward Score and display HUD messages to players for subsequent eliminations in a defined time.   
+     Choose the desired Score and time between kills in Options, add as many HUD Messages as you like to the Array List and let the        
+     script do the rest.                                                                                                                   
+                                                                                                                                           
+           By: Axel Capek | Socials: @AxelCapek                                                                                            
+           Version: 1.7
+           First Published: 2nd August 2022                                                                                                                 
+           Last Updated: 23rd March 2022                                                                                                  
+                                                                                                                                           
+    ## ABOUT ## ===========================================================================================================================##>
+
+    using { /Fortnite.com/Devices }
+    using { /Verse.org/Native }
+    using { /Verse.org/Simulation}
+    using { /UnrealEngine.com/Temporary/Diagnostics }
+    using { /Fortnite.com/Playspaces }
+    using { /Fortnite.com/Characters }
+    using { /Fortnite.com/Game }
+    
+    log_new_device:=class(log_channel){}
+    KillingSpreeScript := class<concrete>(creative_device):
+        Logger:log = log{Channel:=log_new_device}
+        # Device List ===========================================================================
+            @editable      DebugTrigger:trigger_device = trigger_device{}
+            @editable      ScoreDevice:score_manager_device = score_manager_device{}
+            @editable      KillTimer:timer_device = timer_device{}
+            @editable      HUD_First:hud_message_device = hud_message_device{}
+            @editable      HUD_KillingSpree:[]hud_message_device = array{}
+            <#
+
+            ===================================DEVICE SETTINGS===================================
+
+                TIMER DEVICE :
+                    Applies To - Player
+                    Completion Behaviour - Reset
+                    Show On HUD - OFF
+                SCORE MANAGER DEVICE :
+                    Increment Score On Awarding - OFF
+                    Play Audio - OFF
+                HUD MESSAGE DEVICES :
+                    Message Recipient - Triggering Player
+                    Display Time - 3.0 (Optional)
+
+            End of Device List #>
+    
+        # Options ================================================================================
+            #Enable First Blood?
+            @editable      EnableFirstBlood:logic = true
+            ##Time (in seconds) between kills before the Killing Spree Timer expires.
+            @editable      KillTime:float = 3.5
+            ##How many Kills does a player need to have before starting the spree? Ex. 2 Kills in succession = "Double Kill!"
+            @editable      KillsToStartSpree:int = 2
+            ##How much score does each elim award?
+            @editable      ScorePerKill:int = 5
+            ##How much additional score does First Blood award?
+            @editable      ScoreFirstBlood:int = 10
+            ##How much additional score does a spree award? 
+            @editable      ScoreForSpree:int = 5
+        # End of Options =========================================================================
+    
+        # Variables  
+            var FirstBlood:logic = false
+            var PlayerKillCount:[agent]int = map{}
+        # End of Variables ========================================================================
+    
+        # Function: OnBegin =======================================================================
+        OnBegin<override>()<suspends>:void=
+            # Gets players currently in-game and players that join the game then runs the PlayerJoin() function for each.
+            Self.GetPlayspace().PlayerAddedEvent().Subscribe(PlayerJoin)
+            SubscribeOnBeginPlayers()
+            #Subscribe the Success Event of the Kill Timer to fail the spree.
+            KillTimer.SuccessEvent.Subscribe(KillingSpreeFailed)
+            #Sets the Kill Timer duration according to the editable KillTime var.
+            KillTimer.SetMaxDuration(KillTime)
+            # Trigger For Debugging or Event Binding! 
+            # 1 - ###[Hit the trigger to simulate elims!]
+            # 2 - ###[Trigger Can also be attached to Guard Spawner, Creature Spawner with Event Binding if we want AI to count towards Killing Spree!] 
+            DebugTrigger.TriggeredEvent.Subscribe(BeginKillingSpree)
+            Logger.Print("Killing Spree Script Started!")
+        # ========================================================================================
+    
+        # Gets the current availible players and runs the PlayerJoin() function for each.
+        SubscribeOnBeginPlayers():void = 
+            Players:[]player := Self.GetPlayspace().GetPlayers()
+            for (PlayerNum -> P : Players ):
+                PlayerJoin(P)
+
+        # Subscribe players to all relevant functions.
+        PlayerJoin(Agent:agent):void=
+            Print("Player Added!")
+            # Sets the current agents Kill Streak int to 0.
+            if { set PlayerKillCount[Agent] = 0 }
+            # Subscribes elim events for the current agent.
+            if (Chr := Agent.GetFortCharacter[]):
+                Chr.EliminatedEvent().Subscribe(PlayerElimination)
+
+        # Check when a player gets an elimination.
+        PlayerElimination(Elimination:elimination_result):void=
+            Print("Elimination Event!")
+            #Gets the kill instigator from the elimination_result.
+            if(Instigator := Elimination.EliminatingCharacter?, InstigatorAgent := Instigator.GetInstigatorAgent[]):
+                BeginKillingSpree(option {InstigatorAgent}) 
+
+        # Function: Show First Blood Message!
+        GiveFirstBlood(Agent:agent):void=
+            set FirstBlood = true
+            HUD_First.Show( Agent )
+            ScoreDevice.SetScoreAward(ScoreFirstBlood)
+            ScoreDevice.Activate(Agent)
+            Print("First Blood!")
+
+        ## Begin Killing Spree      
+        BeginKillingSpree(Agent:?agent):void=
+            if (Player := Agent?):
+                #Awards First Blood if enabled!
+                if ( not FirstBlood? and EnableFirstBlood?):
+                    GiveFirstBlood(Player)
+                #Agent got an elimination. Increment kill count and give score.
+                if(PlayerKills := set PlayerKillCount[Player] += 1):
+                    ScoreDevice.SetScoreAward(ScorePerKill)
+                    ScoreDevice.Activate(Player)
+                    Print("Kills: {PlayerKills}")
+                    #Agent needs at least {KillsToStartSpree} eliminations to trigger a double kill!
+                    if (PlayerKills >= KillsToStartSpree and PlayerKills < ( HUD_KillingSpree.Length + 1) ):
+                        ##Hides the previous HUD messages.. if they exists.
+                        for (Previous := 0 .. (PlayerKills - KillsToStartSpree - 1)):
+                            if (KillSpreeMessagePrevious := HUD_KillingSpree[Previous]):
+                                KillSpreeMessagePrevious.Hide()
+                        ##Shows the next HUD message.
+                        if (KillSpreeMessageNext := HUD_KillingSpree[ ( PlayerKills - KillsToStartSpree ) ]):
+                            KillSpreeMessageNext.Show( Player )
+                        #Because player got a successful elimination, Killing Spree Timer reset & player is awarded Kill Spree Score.
+                        KillTimer.Reset(Player)
+                        ScoreDevice.SetScoreAward(ScoreForSpree)
+                        ScoreDevice.Activate(Player)
+                    #Agent has reached the max killing spree amount.. Repeat the final HUD message for subsequent eliminations.
+                    else if (PlayerKills >= ( HUD_KillingSpree.Length + 1) ):
+                        if (KillSpreeMessagePrevious := HUD_KillingSpree[ ( HUD_KillingSpree.Length - 2 ) ]):
+                            KillSpreeMessagePrevious.Hide()
+                        ##Shows the next HUD message.
+                        if (KillSpreeMessageNext := HUD_KillingSpree[ ( HUD_KillingSpree.Length - 1) ]):
+                            KillSpreeMessageNext.Show( Player )
+                        KillTimer.Reset(Player)
+                        ScoreDevice.SetScoreAward(ScoreForSpree)
+                        ScoreDevice.Activate(Player)
+                    ##Spawn and Start the Killing Spree Timer.
+                    Print("Successful Elimination.")
+                    KillTimer.Start(Player)
+                    
+
+        KillingSpreeFailed(Agent:?agent):void=
+            #Sets the Players Kill Count Variable back to 0.
+            if(set PlayerKillCount[Agent?] = 0):
+                Logger.Print("Failed Elimination.TTK Timer Expired!") 
+
+    <# END #>
+
+# Type alias
+
+    # This is particularly useful in combination with function types. For example,
+
+    # int_predicate := type{_(:int)<transacts><decides> : void}
+    # Filter(X : []int, F : int_predicate) : []int =
+    #     for (Y : X, F[Y]):
+    #         Y
+    # Note that Verse does not currently support parametric type aliases.
+    
+    # For example,
+    
+    # predicate(t : type) := type{_(:t)<transacts><decides> : void}
