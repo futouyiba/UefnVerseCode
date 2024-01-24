@@ -46,21 +46,6 @@ ProjectLog<public>(Message:[]char, ?Level:log_level = log_level.Normal)<transact
 # You don't have to specify the Level
 # ProjectLog("Hello Verse!")
 
-# logger that can used in <transacts> and <decides> functions
-my_log_channel<public> := class(log_channel):
-
-# A project-wide "Logger" to print messages from functions that are not in a class with a log.
-# The non-Logger Print is <no_rollback>, so it can't be used in a <transacts> function.
-ProjectLog<public>(Message:[]char, ?Level:log_level = log_level.Normal)<transacts>:void=
-    Logger := log{Channel := my_log_channel}
-    Logger.Print(Message, ?Level := Level)
-
-# Usage:
-# ProjectLog("EndGame: Player has won!", ?Level := log_level.Verbose)
-
-# You don't have to specify the Level
-# ProjectLog("Hello Verse!")
-
 # interesting about how to handle all players joining.
 cage_swap_device := class(creative_device):
  
