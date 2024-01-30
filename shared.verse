@@ -1396,8 +1396,8 @@ hpBarSnippet := module:
                     WClass.UpdateUI(Player)
     
                 if(GlobalData.NowHP <= 0.0, Agent := MaybeAgent?):
-                    if(Agent := MaybeAgent?):
-                        HPBar.ElimEvent.Trigger(Agent)
+                    if(Agente := MaybeAgent?):
+                        HPBar.ElimEvent.Trigger(Agente)
                     else:
                         HPBar.ElimEvent.Trigger()
     
@@ -1816,11 +1816,3 @@ hpBarSnippet := module:
                 set NowLineHeight -= if(Value := NowText.LineText[Index].LineHeight). Value else. 0.0
     
             CanvasSlots
-    
-    ToTruncatedString<public>(Number:float, Decimals:int):[]char=
-        var Str:[]char = ToString(Number)
-        if:
-            DotIndex := Str.Find['.']
-            StopIndex := if (Decimals > 0) then Min(DotIndex+Decimals+1,Str.Length) else DotIndex
-            set Str = Str.Slice[0, StopIndex] 
-        Str
