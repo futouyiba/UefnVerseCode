@@ -74,9 +74,6 @@ math_runner_device := class(creative_device):
             block:
                 TreadmillFailureEvent.Await();
             
-            
-            
-                
     PopulateOneRoadProp():void =
         if(LastRoad := ArrRoads[ArrRoads.Length-1]) then:
             set RoadOrigin = LastRoad.GetTransform().Translation + RoadGap

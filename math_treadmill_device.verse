@@ -4,7 +4,15 @@ using { /Verse.org/Simulation }
 using { /UnrealEngine.com/Temporary/Diagnostics }
 using { /UnrealEngine.com/Temporary/SpatialMath }
 
-# See https://dev.epicgames.com/documentation/en-us/uefn/create-your-own-device-in-verse for how to create a verse device.
+
+trigger_pool := class(creative_device):
+    _triggers:[]trigger_device = array{}
+
+
+
+modifier := class:
+    Trigger : trigger_device = trigger_device{}
+
 
 # A Verse-authored creative device that can be placed in a level
 math_treadmill_device := class(creative_device):
