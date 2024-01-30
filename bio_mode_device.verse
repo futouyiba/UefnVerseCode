@@ -65,7 +65,8 @@ bio_mode_device := class(creative_device):
         if:
             # assign zombie pre stuff to bio player
             FetchedZombieStuff := Self.AvailablePreStuff[0]
-            set Self.AvailablePreStuff = Self.AvailablePreStuff.Remove[0,1]
+            Tmp := Self.AvailablePreStuff.Remove[0,1]
+            set Self.AvailablePreStuff = Tmp
             NewBioPlayer := bio_player{LinkedPlayer := Player, Manager:= Self, IncrementalId:= Self.IncrementalId, ZombiePreStuff:= FetchedZombieStuff}
             set BioPlayers[Player] = NewBioPlayer
             Fort := Player.GetFortCharacter[]
