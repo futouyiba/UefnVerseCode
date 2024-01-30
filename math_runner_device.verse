@@ -94,6 +94,7 @@ math_runner_device := class(creative_device):
         if:
             ArrRoads.Length > NumKeepRoadProps
             LeftBehind:=ArrRoads[0]
-            set ArrRoads = ArrRoads.Slice[1, ArrRoads.Length-1]
+            Temp:= ArrRoads.Slice[1, ArrRoads.Length-1]
+            set ArrRoads = Temp
         then:
             LeftBehind.Dispose()

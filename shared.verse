@@ -93,7 +93,8 @@ ToTruncatedString<public>(Number:float, Decimals:int):[]char=
     if:
         DotIndex := Str.Find['.']
         StopIndex := if (Decimals > 0) then Min(DotIndex+Decimals+1,Str.Length) else DotIndex
-        set Str = Str.Slice[0, StopIndex] 
+        Tmp := Str.Slice[0, StopIndex] 
+        set Str = Tmp
     Str
     
 # Device Configuration:
@@ -1144,7 +1145,7 @@ opt_in_selection_pool := module:
         OptOut<private>(Agent:agent):void=
             # RemoveFirstElement returns the array without the first match found, so we set SelectionPool = the new array.
             # We must wrap it in a failure context if the player is not in the array or casting the Agent to a player fails.
-            if (set SelectionPool = SelectionPool.RemoveFirstElement[player[Agent]]):
+            if (Tmp := SelectionPool.RemoveFirstElement[player[Agent]]; set SelectionPool = Tmp;):
                 Print("Player opted out of selection pool. Players in pool: {SelectionPool.Length}")
         
         # Reset all players to opted-out state and removes them from the SelectionPool
